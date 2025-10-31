@@ -1,0 +1,55 @@
+import pandas as pd
+import re
+import os
+from IPython.display import display
+
+#  Ruta donde están los archivos en formato .xls
+carpeta_xls = "C:\\Users\\Freddy\\OneDrive - CELSIA S.A E.S.P\\Trabajo Actual\\Personal\\UNAD\\2025\\Especializacion\\Cursos\\Poyecto de grado II\\Recopilacion"
+archivos = [f for f in os.listdir(carpeta_xls) if f.endswith(".xls")]
+
+# Se crea una lista para almacenar todos los registros verticales
+registros_verticales = []
+
+# Se procesa cada uno de los archivos
+for archivo in archivos:
+    ruta = os.path.join(carpeta_xls, archivo)
+    nombre_archivo = os.path.splitext(archivo)[0]
+
+    # Se extrae la fecha de cada toma en formato MM/YYYY
+    fecha_match = re.search(r"(\d{2})_(\d{4})", nombre_archivo)
+    if fecha_match:
+        mes, año = fecha_match.groups()
+        fecha_columna = f"{mes}/{año}"
+    else:
+        fecha_columna = nombre_archivo
+
+    try:
+        df = pd.read_excel(ruta, sheet_name=0, engine='xlrd')
+        df.columns = [str(col).strip() for col in df.columns]
+
+        for i in range(0, len(df.columns), 3):
+            grupo = df.iloc[:, i:i+3].copy()
+            grupo.columns = ["Celda N°", "Tensión (V)", "Gravedad Específica"]
+            grupo = grupo[grupo["Celda N°"].apply(lambda x: str(x).strip().isdigit())]
+
+            grupo["Celda N°"] = pd.to_numeric(grupo["Celda N°"], errors="coerce")
+            grupo["Tensión (V)"] = grupo["Tensión (V)"].astype(str).str.replace(",", ".").astype(float)
+            grupo["Gravedad Específica"] = pd.to_numeric(grupo["Gravedad Específica"], errors="coerce")
+            grupo["Fecha"] = fecha_columna
+
+            grupo = grupo[grupo["Celda N°"].between(1, 60)]
+            registros_verticales.append(grupo)
+
+    except Exception as e:
+        print(f" Error procesando {archivo}: {e}")
+
+#  Se unen todos los registros en forma vertical
+df_vertical = pd.concat(registros_verticales, ignore_index=True)
+
+#  Ordenar por No. de  celda N° y fecha
+df_vertical["Fecha_orden"] = pd.to_datetime("01/" + df_vertical["Fecha"], format="%d/%m/%Y", errors="coerce")
+df_vertical = df_vertical.sort_values(["Fecha_orden", "Celda N°"]).drop(columns="Fecha_orden").reset_index(drop=True)
+
+#  Se muestran los resultados
+
+display(df_vertical)  
